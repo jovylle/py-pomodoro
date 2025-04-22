@@ -1,48 +1,18 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-  <title>Pomodoro Timer</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      margin: 20px;
-    }
-
-    h1 {
-      margin-bottom: 0;
-    }
-
-    .time {
-      font-size: 48px;
-      margin: 20px 0;
-    }
-
-    .progress {
-      font-size: 24px;
-      letter-spacing: 2px;
-    }
-
-    button {
-      padding: 10px 20px;
-      margin: 5px;
-      font-size: 16px;
-    }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pomodoro Timer</title><!-- filepath: /Users/jovylle.bermudez/fore/lab/py-pomodoro/index.html -->
+  <script src="renderer.js"></script>
 </head>
 
 <body>
-  <h1>Pomodoro</h1>
-  <div id="mode">Mode: -</div>
-  <div class="time" id="timer">0s</div>
-  <div class="progress" id="progress">○○○○○○○○○○</div>
-  <div id="counts">Focus: 0 | Breaks: 0</div>
-  <button onclick="start('focus')">Start Focus</button>
-  <button onclick="start('break')">Start Break</button>
-  <button onclick="stop()">Stop</button>
-  <audio id="sound" src="alert.mp3"></audio>
-  <script src="renderer.js"></script>
+  <h1>Pomodoro Timer</h1>
+  <p id="mode">Mode: Idle</p>
+  <p id="timer">0m 0s</p>
+  <p id="counts">Focus: 0 | Breaks: 0</p>
 </body>
 
 </html>
