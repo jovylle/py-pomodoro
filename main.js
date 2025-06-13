@@ -81,8 +81,8 @@ function startTimer (duration, state) {
 /* ---------- tray menu ---------- */
 function buildContextMenu () {
   return Menu.buildFromTemplate([
-    { label: 'Start Focus Timer', click: () => startTimer(15 * 6, 'Focus') }, // 15 min
-    { label: 'Start Break Timer', click: () => startTimer(5 * 6, 'Break') },  // 5 min
+    { label: 'Start Focus Timer', click: () => startTimer(15 * 60, 'Focus') }, // 15 min
+    { label: 'Start Break Timer', click: () => startTimer(5 * 60, 'Break') },  // 5 min
     {
       label: isPaused ? 'Resume Timer' : 'Pause Timer',
       click: () => { isPaused = !isPaused; tray.setContextMenu(buildContextMenu()); }
