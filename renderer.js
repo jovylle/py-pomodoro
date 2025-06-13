@@ -20,3 +20,12 @@ ipcRenderer.on('timer-update', (event, { elapsedTime, timerState, focusCount, br
     countsElement.textContent = `Focus: ${focusCount} | Breaks: ${breakCount}`;
   }
 });
+
+const pauseBtn = document.getElementById('pauseBtn');
+let isPaused = false;
+
+pauseBtn.addEventListener('click', () => {
+  isPaused = !isPaused;
+  pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
+  window.electron?.ipcRenderer?.send('toggle-pause', isPaused);
+});

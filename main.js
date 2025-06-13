@@ -1,16 +1,17 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, Notification } = require('electron');
+
 const path = require('path');
 const { exec } = require('child_process');
 
-let win;
-let tray;
-let timerInterval;
+let win, tray, timerInterval;
 let timerState = 'Idle';
 let elapsedTime = 0;
 let intervalDuration = 0;
-let focusCount = 0; // Total focus sessions completed today
-let breakCount = 0; // Total break sessions completed today
+let focusCount = 0;
+let breakCount = 0;
+let isPaused = false;
 
+/* ---------- helpers ---------- */
 function createWindow () {
   win = new BrowserWindow({
     width: 300,
@@ -23,36 +24,50 @@ function createWindow () {
       nodeIntegration: true,
     },
   });
-
   win.loadFile('index.html');
-  win.on('close', (e) => {
-    e.preventDefault();
-    win.hide();
-  });
+  win.on('close', e => { e.preventDefault(); win.hide(); });
 }
 
-function formatTime (seconds) {
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${minutes}m ${secs}s`;
-}
+const formatTime = s => `${Math.floor(s / 60)}m ${s % 60}s`;
 
 function playSound (state) {
-  const soundPath =
-    state === 'Focus'
-      ? path.join(__dirname, 'focus-alert.mp3') // Focus mode sound
-      : path.join(__dirname, 'break-alert.mp3'); // Break mode sound
+  const sound = state === 'Focus'
+    ? 'focus-alert.mp3'
+    : 'break-alert.mp3';
 
-  exec(`afplay "${soundPath}"`, (err) => {
+  const filePath = path.join(__dirname, sound);
+
+  exec(`afplay "${filePath}"`, (err) => {
     if (err) {
       console.error('Error playing sound:', err);
     }
   });
+
+  new Notification({
+    title: state === 'Focus' ? 'Focus Done!' : 'Break Done!',
+    body: '⏰ Time is up!',
+    silent: false
+  }).show();
 }
 
+
 function updateTray () {
-  const title = `${timerState} | ${formatTime(elapsedTime)} | Focus: ${focusCount} | Breaks: ${breakCount}`;
-  tray.setTitle(title);
+  tray.setTitle(`${isPaused ? '⏸' : timerState} | ${formatTime(elapsedTime)} | Focus: ${focusCount} | Breaks: ${breakCount}`);
+}
+
+/* ---------- timer logic ---------- */
+function tickTimer (state) {
+  if (isPaused) return;
+
+  elapsedTime++;
+  updateTray();
+
+  win?.webContents.send('timer-update', { elapsedTime, timerState, focusCount, breakCount });
+
+  if (elapsedTime % intervalDuration === 0) {
+    playSound(state);
+    if (state === 'Focus') focusCount++; else breakCount++;
+  }
 }
 
 function startTimer (duration, state) {
@@ -60,61 +75,33 @@ function startTimer (duration, state) {
   elapsedTime = 0;
   intervalDuration = duration;
   clearInterval(timerInterval);
-
-  timerInterval = setInterval(() => {
-    elapsedTime++;
-    updateTray();
-
-    // Send updates to the renderer process
-    if (win && win.webContents) {
-      win.webContents.send('timer-update', {
-        elapsedTime,
-        timerState,
-        focusCount,
-        breakCount,
-      });
-    }
-
-    // Play sound at regular intervals
-    if (elapsedTime % intervalDuration === 0) {
-      playSound(state);
-      if (state === 'Focus') {
-        focusCount++;
-      } else if (state === 'Break') {
-        breakCount++;
-      }
-    }
-  }, 1000);
+  timerInterval = setInterval(() => tickTimer(state), 1000);
 }
 
+/* ---------- tray menu ---------- */
+function buildContextMenu () {
+  return Menu.buildFromTemplate([
+    { label: 'Start Focus Timer', click: () => startTimer(15 * 6, 'Focus') }, // 15 min
+    { label: 'Start Break Timer', click: () => startTimer(5 * 6, 'Break') },  // 5 min
+    {
+      label: isPaused ? 'Resume Timer' : 'Pause Timer',
+      click: () => { isPaused = !isPaused; tray.setContextMenu(buildContextMenu()); }
+    },
+    { label: 'Show Timer', click: () => win.show() },
+    { label: 'Quit', click: () => { clearInterval(timerInterval); app.exit(); } },
+  ]);
+}
+
+/* ---------- app lifecycle ---------- */
 app.whenReady().then(() => {
   createWindow();
-
-  const emptyImage = nativeImage.createEmpty();
-  tray = new Tray(emptyImage);
-
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Start Focus Timer',
-      click: () => startTimer(15*60, 'Focus'), // 15 seconds for testing
-    },
-    {
-      label: 'Start Break Timer',
-      click: () => startTimer(5*60, 'Break'), // 5 seconds for testing
-    },
-    {
-      label: 'Show Timer',
-      click: () => win.show(),
-    },
-    {
-      label: 'Quit',
-      click: () => {
-        clearInterval(timerInterval);
-        app.exit();
-      },
-    },
-  ]);
-  tray.setContextMenu(contextMenu);
-
+  tray = new Tray(nativeImage.createEmpty());
+  tray.setContextMenu(buildContextMenu());
   updateTray();
+});
+
+/* ---------- renderer pause toggle ---------- */
+ipcMain.on('toggle-pause', (_e, pauseState) => {
+  isPaused = pauseState;
+  tray.setContextMenu(buildContextMenu());
 });
