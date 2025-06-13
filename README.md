@@ -29,6 +29,6 @@ A simple, desktop-based Pomodoro timer built with Electron.
 
 ```bash
 git clone https://github.com/jovylle/py-pomodoro.git
-cd YOUR_REPO
+cd py-pomodoro
 npm install
 npm start
