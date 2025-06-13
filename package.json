@@ -2,12 +2,18 @@
   "name": "pomodoro-timer",
   "version": "1.0.0",
   "main": "main.js",
+  "build": {
+    "appId": "com.jovylle.pomodoro",
+    "mac": {
+      "target": "dmg"
+    }
+  },
   "scripts": {
     "start": "electron .",
-    "package": "electron-packager . PomodoroTimer --platform=darwin --arch=x64 --out=dist --overwrite"
+    "dist": "electron-builder"
   },
   "devDependencies": {
     "electron": "^28.1.0",
-    "electron-packager": "^17.1.2"
+    "electron-builder": "^24.13.3"
   }
 }
