@@ -1,12 +1,20 @@
 {
   "name": "pomodoro-timer",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "main": "main.js",
   "build": {
     "appId": "com.jovylle.pomodoro",
     "mac": {
-      "target": "dmg"
-    }
+      "target": "dmg",
+      "icon": "icon.icns"
+    },
+    "files": [
+      "main.js",
+      "renderer.js",
+      "index.html",
+      "package.json",
+      "assets/**"
+    ]
   },
   "scripts": {
     "start": "electron .",
@@ -15,9 +23,5 @@
   "devDependencies": {
     "electron": "^28.1.0",
     "electron-builder": "^24.13.3"
-  },
-  "mac": {
-    "target": "dmg",
-    "icon": "icon.icns"
   }
 }

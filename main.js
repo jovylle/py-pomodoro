@@ -31,15 +31,16 @@ function createWindow () {
 const formatTime = s => `${Math.floor(s / 60)}m ${s % 60}s`;
 
 function playSound (state) {
-  const sound = state === 'Focus'
-    ? 'focus-alert.mp3'
-    : 'break-alert.mp3';
-  const filePath = path.join(__dirname, sound);
+  // const sound = state === 'Focus'
+  //   ? 'focus-alert.mp3'
+  //   : 'break-alert.mp3';
+  // const filePath = path.join(__dirname, sound);
 
   // Play sound
-  exec(`afplay "${filePath}"`, err => {
-    if (err) console.error('Error playing sound:', err);
-  });
+  // exec(`afplay "${filePath}"`, err => {
+  //   if (err) console.error('Error playing sound:', err);
+  // });
+  win.webContents.send('play-sound', state);
 
   // Native notification
   new Notification({

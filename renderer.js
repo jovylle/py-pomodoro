@@ -80,4 +80,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     box.style.display = 'block';
   });
+  ipcRenderer.on('play-sound', (_e, state) => {
+    const audio = new Audio(`assets/${state === 'Focus' ? 'focus-alert.mp3' : 'break-alert.mp3'}`);
+    audio.play().catch(console.error);
+  });
 });
