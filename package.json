@@ -15,5 +15,9 @@
   "devDependencies": {
     "electron": "^28.1.0",
     "electron-builder": "^24.13.3"
+  },
+  "mac": {
+    "target": "dmg",
+    "icon": "icon.icns"
   }
 }

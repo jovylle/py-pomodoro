@@ -3,7 +3,6 @@
 
 A simple, desktop-based Pomodoro timer built with Electron.
 
-![screenshot](./screenshot.png) <!-- optional -->
 
 ---
 
@@ -11,6 +10,7 @@ A simple, desktop-based Pomodoro timer built with Electron.
 
 - 🕒 Focus & break sessions with sound alerts  
 - ⏸ Pause and resume support  
+![screenshot](./menu-frommenubar.png) <!-- optional -->
 - 🔊 Loud notifications with system popups  
 - 🪟 Tray icon with controls  
 - ⚙️ Custom timer durations via UI  
@@ -24,6 +24,11 @@ A simple, desktop-based Pomodoro timer built with Electron.
 
 > ✅ Mac `.dmg` installer available
 
+![screenshot](./install.png) <!-- optional -->
+
+![screenshot](./window.png) <!-- optional -->
+
+![screenshot](./window-with-alert.png) <!-- optional -->
 ---
 
 ## 🛠 Run from source
