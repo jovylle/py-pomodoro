@@ -1,31 +1,83 @@
 const { ipcRenderer } = require('electron');
 
-// Listen for timer updates from the main process
-ipcRenderer.on('timer-update', (event, { elapsedTime, timerState, focusCount, breakCount }) => {
-  const timerElement = document.getElementById('timer');
-  const stateElement = document.getElementById('mode');
-  const countsElement = document.getElementById('counts');
+document.addEventListener('DOMContentLoaded', () => {
+  const focusBtn = document.getElementById('startFocusBtn');
+  const breakBtn = document.getElementById('startBreakBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const altBtn = document.getElementById('altSessionBtn');
 
-  if (timerElement) {
-    const minutes = Math.floor(elapsedTime / 60);
-    const seconds = elapsedTime % 60;
-    timerElement.textContent = `${minutes}m ${seconds}s`;
-  }
+  let isPaused = false;
 
-  if (stateElement) {
-    stateElement.textContent = `Mode: ${timerState}`;
-  }
+  document.getElementById('startFocusBtn').addEventListener('click', () => {
+    const focusMinutes = parseInt(document.getElementById('focusMinutes').value, 10) || 15;
+    ipcRenderer.send('start-timer', { mode: 'Focus', minutes: focusMinutes });
+    window.close();
+  });
 
-  if (countsElement) {
-    countsElement.textContent = `Focus: ${focusCount} | Breaks: ${breakCount}`;
-  }
-});
+  document.getElementById('startBreakBtn').addEventListener('click', () => {
+    const breakMinutes = parseInt(document.getElementById('breakMinutes').value, 10) || 5;
+    ipcRenderer.send('start-timer', { mode: 'Break', minutes: breakMinutes });
+    window.close();
+  });
 
-const pauseBtn = document.getElementById('pauseBtn');
-let isPaused = false;
+  pauseBtn.addEventListener('click', () => {
+    isPaused = !isPaused;
+    pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
+    ipcRenderer.send('toggle-pause', isPaused);
+  });
 
-pauseBtn.addEventListener('click', () => {
-  isPaused = !isPaused;
-  pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
-  window.electron?.ipcRenderer?.send('toggle-pause', isPaused);
+  altBtn.addEventListener('click', () => {
+    const mode = altBtn.dataset.mode;
+    const minutes = mode === 'Focus'
+      ? parseInt(document.getElementById('focusMinutes').value, 10) || 15
+      : parseInt(document.getElementById('breakMinutes').value, 10) || 5;
+
+    ipcRenderer.send('start-timer', { mode, minutes });
+    window.close();
+  });
+
+  document.getElementById('dismissBtn').addEventListener('click', () => {
+    window.close();
+  });
+
+  // ✅ Now safe: listener just updates UI
+  ipcRenderer.on('timer-update', (event, { elapsedTime, timerState, focusCount, breakCount }) => {
+    document.getElementById('timer').textContent = `${Math.floor(elapsedTime / 60)}m ${elapsedTime % 60}s`;
+    document.getElementById('mode').textContent = `Mode: ${timerState}`;
+    document.getElementById('counts').textContent = `Focus: ${focusCount} | Breaks: ${breakCount}`;
+
+    if (timerState === 'Idle') {
+      focusBtn.style.display = 'inline-block';
+      breakBtn.style.display = 'inline-block';
+    } else if (timerState === 'Focus') {
+      // focusBtn.style.display = 'none';
+      // breakBtn.style.display = 'inline-block'; // not needed, since already inside the alert block
+    } else if (timerState === 'Break') {
+      // focusBtn.style.display = 'inline-block'; // not needed, since already inside the alert block
+      // breakBtn.style.display = 'none';
+    }
+    
+    if (timerState === 'Idle') {
+      pauseBtn.style.display = 'none';
+    } else {
+      pauseBtn.style.display = 'inline-block';
+      focusBtn.style.display = 'inline-block'; // now needed this because to apply timer
+      breakBtn.style.display = 'inline-block'; // now needed this because to apply timer
+      altBtn.style.display = 'none'; // not need this now.
+    }
+  });
+
+  ipcRenderer.on('session-ended', (_e, state) => {
+    const box = document.getElementById('sessionMessage');
+    const title = document.getElementById('messageTitle');
+    const text = document.getElementById('messageText');
+
+    title.textContent = state === 'Focus' ? '🎉 Focus Complete!' : '☕ Break Over!';
+    text.textContent = state === 'Focus' ? 'Time for a break.' : 'Back to work!';
+
+    // altBtn.textContent = state === 'Focus' ? 'Start Break' : 'Start Focus';
+    // altBtn.dataset.mode = state === 'Focus' ? 'Break' : 'Focus';
+
+    box.style.display = 'block';
+  });
 });

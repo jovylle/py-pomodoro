@@ -32,3 +32,15 @@ git clone https://github.com/jovylle/py-pomodoro.git
 cd py-pomodoro
 npm install
 npm start
+
+
+
+### 📦 Create Dev Snapshot ZIP
+
+To zip only the core files (`main.js`, `renderer.js`, `package.json`, `index.html`) with today’s date:
+
+```bash
+zip -r "py-pomodoro-$(date +%Y-%m-%d-%H-%M).zip" main.js renderer.js package.json index.html
+```
+
+> Output: `py-pomodoro-2025-06-16.zip`

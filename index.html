@@ -2,9 +2,69 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pomodoro Timer</title><!-- filepath: /Users/jovylle.bermudez/fore/lab/py-pomodoro/index.html -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pomodoro Timer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      margin: 0;
+      text-align: center;
+      font-size: 0.8rem;
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    #mode,
+    #timer,
+    #counts {
+      font-size: 0.8rem;
+      margin: 10px 0;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      margin: 5px;
+      cursor: pointer;
+    }
+
+    #pauseBtn {
+      background-color: #007bff;
+      color: white;
+    }
+
+    #startFocusBtn {
+      background-color: #28a745;
+      color: white;
+    }
+
+    #startBreakBtn {
+      background-color: #ffc107;
+      color: black;
+    }
+
+    #dismissBtn,
+    #altSessionBtn {
+      background-color: #6c757d;
+      color: white;
+    }
+
+    #sessionMessage {
+      display: none;
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fefefe;
+      text-align: center;
+    }
+  </style>
   <script src="renderer.js"></script>
 </head>
 
@@ -13,7 +73,22 @@
   <p id="mode">Mode: Idle</p>
   <p id="timer">0m 0s</p>
   <p id="counts">Focus: 0 | Breaks: 0</p>
-  <button id="pauseBtn">Pause</button>
+  <div style="margin-bottom: 10px;">
+    <label style="display: block;">Focus (min): <input id="focusMinutes" type="number" value="15" min="1" style="width: 50px;"></label>
+    <label style="display: block;">Break (min): <input id="breakMinutes" type="number" value="5" min="1" style="width: 50px;"></label>
+    </div>
+  <div id="controls">
+    <button id="pauseBtn" style="display: none;">Pause</button>
+    <button id="startFocusBtn" style="display: none;">Start Focus</button>
+    <button id="startBreakBtn" style="display: none;">Start Break</button>
+  </div>
+
+  <div id="sessionMessage">
+    <h2 id="messageTitle">Session Done!</h2>
+    <p id="messageText">Take a break or start another session.</p>
+    <button id="altSessionBtn">Start</button>
+    <button id="dismissBtn">Close</button>
+  </div>
 </body>
 
 </html>
