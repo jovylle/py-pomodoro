@@ -75,3 +75,22 @@ npm run dist
 
 Output will be in the `dist/` folder.
 You can then upload the `.dmg` to GitHub Releases.
+
+
+## 🧰 System Requirements
+
+> This app is currently built for **macOS** only.
+
+### Minimum:
+
+* macOS 11 (Big Sur) or later
+* Intel or Apple Silicon (M1/M2)
+* Node.js ≥ 16
+* npm ≥ 7
+
+### Optional (for developers):
+
+* Xcode Command Line Tools (for building `.dmg` installer)
+* `iconutil` and `sips` (default on macOS)
+
+> 💡 Windows & Linux support not yet included, but can be added with Electron cross-platform packaging.
