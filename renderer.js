@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const pauseBtn = document.getElementById('pauseBtn');
   const altBtn = document.getElementById('altSessionBtn');
   const speakToggle = document.getElementById('speakTimeToggle');
+  const autoStartHourInput = document.getElementById('autoStartHour');
+  const autoStartEnable = document.getElementById('autoStartEnable');
 
   let isPaused = false;
 
@@ -48,10 +50,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (autoStartHourInput) {
+    autoStartHourInput.addEventListener('change', () => {
+      const v = parseInt(autoStartHourInput.value, 10);
+      if (!Number.isNaN(v) && v >= 0 && v <= 23) {
+        ipcRenderer.send('update-auto-start-hour', v);
+      }
+    });
+  }
+  if (autoStartEnable) {
+    autoStartEnable.addEventListener('change', () => {
+      // reuse existing mechanism: toggling autoStartEnabled only in main through manual editing currently
+      // we simulate toggle by sending hour again (already handler) and request main to enable via existing tray? For now just send IPC for enabling logic extension.
+      ipcRenderer.send('update-auto-start-hour', parseInt(autoStartHourInput.value,10));
+      ipcRenderer.send('toggle-auto-start', autoStartEnable.checked);
+    });
+  }
+
   // Request initial preferences (in case default changes later)
   ipcRenderer.send('request-prefs');
   ipcRenderer.on('preferences-state', (_e, prefs) => {
     if (speakToggle) speakToggle.checked = !!prefs.speakTimeEnabled;
+    if (autoStartHourInput && typeof prefs.autoStartHour === 'number') autoStartHourInput.value = prefs.autoStartHour;
+    if (autoStartEnable) autoStartEnable.checked = !!prefs.autoStartEnabled;
   });
 
   // ✅ Now safe: listener just updates UI
