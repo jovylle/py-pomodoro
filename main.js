@@ -28,8 +28,8 @@ const COMPLETION_FLASH_CYCLES = 8;
 const DEFAULT_FOCUS_MINUTES = 10;
 const DEFAULT_BREAK_MINUTES = 5;
 // For debugging you can change this (e.g. set to 1 or 5) to accelerate sessions
-const SECONDS_PER_MINUTE = 1;
-// const SECONDS_PER_MINUTE = 60;
+// const SECONDS_PER_MINUTE = 1;
+const SECONDS_PER_MINUTE = 60;
 // Mutable user-selected durations (updated from renderer inputs)
 let userFocusMinutes = DEFAULT_FOCUS_MINUTES;
 let userBreakMinutes = DEFAULT_BREAK_MINUTES;
