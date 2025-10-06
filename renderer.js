@@ -93,6 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // altBtn.dataset.mode = state === 'Focus' ? 'Break' : 'Focus';
 
     box.style.display = 'block';
+    queueMicrotask(reportSize);
   });
   // --- Sound amplification strategy ---
   // 1. Prefer Web Audio API (allows gain > 1.0 without layering hack)
@@ -159,6 +160,17 @@ document.addEventListener('DOMContentLoaded', () => {
     playLoud(file);
   });
 
+  function reportSize () {
+    try {
+      const bodyRect = document.body.getBoundingClientRect();
+      ipcRenderer.send('content-size', { width: bodyRect.width + 20, height: bodyRect.height + 20 });
+    } catch (e) { /* ignore */ }
+  }
+
+  // Initial size after render
+  setTimeout(reportSize, 60);
+  window.addEventListener('resize', () => reportSize());
+
   ipcRenderer.on('speak-time', (_e, payload) => {
     if (!('speechSynthesis' in window)) return;
     try {
@@ -170,7 +182,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const minutePart = minutes === 0 ? '' : `:${minutes.toString().padStart(2,'0')}`;
       const timeStr = `${h12}${minutePart} ${ampm}`;
       const modeStr = (payload.state || '').toLowerCase(); // 'focus' or 'break'
-      const phrase = `${timeStr} on ${modeStr}`; // e.g. "1:30 pm on break" or "2 pm on focus"
+      // New order: mode first then time -> "on break, 1:30 pm" or "on focus, 2 pm"
+      const phrase = `on ${modeStr}, ${timeStr}`;
       const utter = new SpeechSynthesisUtterance(phrase);
       utter.rate = 1.0;
       utter.pitch = 1.0;
