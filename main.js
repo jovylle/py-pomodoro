@@ -83,7 +83,6 @@ function playSound (state) {
   // Optional intrusive behavior (user-toggleable) replicates old popup focus
   if (intrusivePopupsEnabled && win) {
     win.show();
-    win.setSize(400, 720);
     win.focus();
     app.dock?.bounce();
   }
@@ -175,7 +174,6 @@ function buildContextMenu () {
           focusCount,
           breakCount
         });
-        win.setSize(400, 450);
       }
     },
     { label: 'Quit', click: () => { clearInterval(timerInterval); app.exit(); } }
@@ -211,6 +209,17 @@ ipcMain.on('start-timer', (_e, { mode, minutes }) => {
   }
   tray.setContextMenu(buildContextMenu()); // reflect new values in tray labels
   startTimer(duration, mode);
+});
+
+// Renderer reports content size for auto-resize
+ipcMain.on('content-size', (_e, { width, height }) => {
+  if (!win) return;
+  const bounds = win.getBounds();
+  const targetWidth = Math.max(300, Math.round(width));
+  const targetHeight = Math.max(400, Math.round(height));
+  if (bounds.width !== targetWidth || bounds.height !== targetHeight) {
+    win.setSize(targetWidth, targetHeight, false);
+  }
 });
 
 // Speak time toggle from renderer
