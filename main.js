@@ -10,6 +10,31 @@ let intervalDuration = 0;
 let focusCount = 0;
 let breakCount = 0;
 let isPaused = false;
+// User preference: start in non-intrusive mode (no forced window focus)
+let intrusivePopupsEnabled = false; // can be toggled from tray menu
+// (Disabled) previous flashing mechanism state holders (kept for potential re-enable)
+let completionTitleTimeout = null; // unused now
+let completionFlashInterval = null; // unused now
+let autoStartEnabled = false; // user toggle: auto start focus at 8AM
+let lastAutoStartDay = null; // to ensure single auto-start per calendar day
+
+// (Flashing disabled) constants retained for easy future restoration
+const COMPLETION_FLASH_INTERVAL_MS = 650;
+const COMPLETION_FLASH_CYCLES = 8;
+
+/* ---------- configurable defaults (minutes) ---------- */
+// Central place to tweak default session lengths used by tray quick actions.
+// Renderer UI still allows custom overrides and sends explicit minutes.
+const DEFAULT_FOCUS_MINUTES = 10;
+const DEFAULT_BREAK_MINUTES = 5;
+// For debugging you can change this (e.g. set to 1 or 5) to accelerate sessions
+const SECONDS_PER_MINUTE = 1;
+// const SECONDS_PER_MINUTE = 60;
+// Mutable user-selected durations (updated from renderer inputs)
+let userFocusMinutes = DEFAULT_FOCUS_MINUTES;
+let userBreakMinutes = DEFAULT_BREAK_MINUTES;
+// User-controlled (via renderer settings) speak-time preference
+let speakTimeEnabled = true;
 
 /* ---------- helpers ---------- */
 function createWindow () {
@@ -28,44 +53,44 @@ function createWindow () {
   win.on('close', e => { e.preventDefault(); win.hide(); });
 }
 
-const formatTime = s => `${Math.floor(s / 60)}m ${s % 60}s`;
+const formatTime = s => `${Math.floor(s / SECONDS_PER_MINUTE)}m ${s % SECONDS_PER_MINUTE}s`;
 
 function playSound (state) {
-  // const sound = state === 'Focus'
-  //   ? 'focus-alert.mp3'
-  //   : 'break-alert.mp3';
-  // const filePath = path.join(__dirname, sound);
+  // Trigger renderer to play appropriate sound asset (focus-alert/break-alert)
+  win?.webContents.send('play-sound', state);
 
-  // Play sound
-  // exec(`afplay "${filePath}"`, err => {
-  //   if (err) console.error('Error playing sound:', err);
-  // });
-  win.webContents.send('play-sound', state);
-
-  // Native notification
+  // Always show a native notification (lets macOS handle presentation / DND)
   new Notification({
-    title: state === 'Focus' ? 'Focus Done!' : 'Break Done!',
-    body: '⏰ Time is up!',
+    title: state === 'Focus' ? 'Focus complete' : 'Break complete',
+    body: state === 'Focus' ? 'Time for a break.' : 'Back to work!',
     silent: false
   }).show();
 
-  // Show window and flash dock icon
-  if (win) {
-    win.show();          // bring to front
-    win.webContents.send('timer-update', {
-      elapsedTime,
-      timerState,
-      focusCount,
-      breakCount
-    });
-    win.setSize(400, 720)
-    win.focus();         // focus if possible
-    app.dock?.bounce();  // macOS dock bounce (if supported)
+  // Update renderer silently (in case window is already open)
+  win?.webContents.send('timer-update', {
+    elapsedTime,
+    timerState,
+    focusCount,
+    breakCount
+  });
+  win?.webContents.send('session-ended', state);
+  if (speakTimeEnabled) {
+    win?.webContents.send('speak-time', { iso: new Date().toISOString(), state });
   }
 
-  // Optional: show alert in renderer
-  win?.webContents.send('session-ended', state);
+  // Tray title no longer overridden on completion (requested: keep stable menubar text)
+
+  // Optional intrusive behavior (user-toggleable) replicates old popup focus
+  if (intrusivePopupsEnabled && win) {
+    win.show();
+    win.setSize(400, 720);
+    win.focus();
+    app.dock?.bounce();
+  }
 }
+
+// NOTE: indicateSessionCompletion disabled per request (menubar text should not change)
+function indicateSessionCompletion () { /* intentionally no-op */ }
 
 
 function updateTray () {
@@ -103,8 +128,8 @@ function startTimer (duration, state) {
 /* ---------- tray menu ---------- */
 function buildContextMenu () {
   const menu = [
-    { label: 'Start Focus Timer', click: () => startTimer(15 * 60, 'Focus') },
-    { label: 'Start Break Timer', click: () => startTimer(5 * 60, 'Break') },
+  { label: `Start Focus (${userFocusMinutes}m)`, click: () => startTimer(userFocusMinutes * SECONDS_PER_MINUTE, 'Focus') },
+  { label: `Start Break (${userBreakMinutes}m)`, click: () => startTimer(userBreakMinutes * SECONDS_PER_MINUTE, 'Break') },
   ];
 
   if (timerState !== 'Idle') {
@@ -118,6 +143,26 @@ function buildContextMenu () {
   }
 
   menu.push(
+    {
+      label: intrusivePopupsEnabled ? 'Disable Popups on Complete' : 'Enable Popups on Complete',
+      type: 'checkbox',
+      checked: intrusivePopupsEnabled,
+      click: () => {
+        intrusivePopupsEnabled = !intrusivePopupsEnabled;
+        tray.setContextMenu(buildContextMenu());
+      }
+    },
+    {
+      label: 'Auto Start Focus 8AM',
+      type: 'checkbox',
+      checked: autoStartEnabled,
+      click: () => {
+        autoStartEnabled = !autoStartEnabled;
+        // Reset last auto start day so if toggled on before today's 8AM and time hasn't passed, it can trigger
+        if (!lastAutoStartDay) lastAutoStartDay = null;
+        tray.setContextMenu(buildContextMenu());
+      }
+    },
     {
       label: 'Show Window', click: () => {
         win.show();
@@ -146,6 +191,8 @@ app.whenReady().then(() => {
   tray = new Tray(nativeImage.createEmpty());
   tray.setContextMenu(buildContextMenu());
   updateTray();
+  // Start periodic check for 8AM auto start (every 15s keeps power usage low)
+  setInterval(() => maybeAutoStartFocus(), 15000);
 });
 
 /* ---------- renderer pause toggle ---------- */
@@ -155,6 +202,38 @@ ipcMain.on('toggle-pause', (_e, pauseState) => {
 });
 
 ipcMain.on('start-timer', (_e, { mode, minutes }) => {
-  const duration = minutes * 60;
+  const duration = minutes * SECONDS_PER_MINUTE;
+  // Update remembered durations based on last explicit user input
+  if (mode === 'Focus') {
+    userFocusMinutes = minutes;
+  } else if (mode === 'Break') {
+    userBreakMinutes = minutes;
+  }
+  tray.setContextMenu(buildContextMenu()); // reflect new values in tray labels
   startTimer(duration, mode);
 });
+
+// Speak time toggle from renderer
+ipcMain.on('toggle-speak-time', (_e, enabled) => {
+  speakTimeEnabled = !!enabled;
+});
+
+// Renderer can request current preferences
+ipcMain.on('request-prefs', (e) => {
+  e.sender.send('preferences-state', { speakTimeEnabled });
+});
+
+/* ---------- auto start (8AM) logic ---------- */
+function maybeAutoStartFocus () {
+  if (!autoStartEnabled) return;
+  if (timerState !== 'Idle') return; // don't interrupt active session
+  const now = new Date();
+  // Only trigger exactly during the 8:00 minute window (00–59s) once per day
+  if (now.getHours() === 8 && now.getMinutes() === 0) {
+    const dayKey = now.toDateString();
+    if (lastAutoStartDay !== dayKey) {
+      lastAutoStartDay = dayKey;
+      startTimer(userFocusMinutes * SECONDS_PER_MINUTE, 'Focus');
+    }
+  }
+}

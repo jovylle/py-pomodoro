@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const breakBtn = document.getElementById('startBreakBtn');
   const pauseBtn = document.getElementById('pauseBtn');
   const altBtn = document.getElementById('altSessionBtn');
+  const speakToggle = document.getElementById('speakTimeToggle');
 
   let isPaused = false;
 
@@ -38,6 +39,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('dismissBtn').addEventListener('click', () => {
     window.close();
+  });
+
+  // Speak time toggle -> main process
+  if (speakToggle) {
+    speakToggle.addEventListener('change', () => {
+      ipcRenderer.send('toggle-speak-time', speakToggle.checked);
+    });
+  }
+
+  // Request initial preferences (in case default changes later)
+  ipcRenderer.send('request-prefs');
+  ipcRenderer.on('preferences-state', (_e, prefs) => {
+    if (speakToggle) speakToggle.checked = !!prefs.speakTimeEnabled;
   });
 
   // ✅ Now safe: listener just updates UI
@@ -80,8 +94,90 @@ document.addEventListener('DOMContentLoaded', () => {
 
     box.style.display = 'block';
   });
-  ipcRenderer.on('play-sound', (_e, state) => {
-    const audio = new Audio(`assets/${state === 'Focus' ? 'focus-alert.mp3' : 'break-alert.mp3'}`);
-    audio.play().catch(console.error);
+  // --- Sound amplification strategy ---
+  // 1. Prefer Web Audio API (allows gain > 1.0 without layering hack)
+  // 2. Fallback to layered HTMLAudio elements if context creation fails
+  const SOUND_GAIN = 1.8; // raise/lower to taste; >2.0 may introduce clipping
+  const LAYER_FALLBACK_COUNT = 3; // used only if Web Audio not available
+  let audioCtx = null;
+  const audioBufferCache = new Map(); // filename -> AudioBuffer
+
+  async function ensureContext () {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) {
+        audioCtx = null;
+      }
+    }
+    return audioCtx;
+  }
+
+  async function loadBuffer (file) {
+    if (audioBufferCache.has(file)) return audioBufferCache.get(file);
+    const res = await fetch(`assets/${file}`);
+    const arr = await res.arrayBuffer();
+    const buf = await audioCtx.decodeAudioData(arr);
+    audioBufferCache.set(file, buf);
+    return buf;
+  }
+
+  function fallbackLayerPlay (file) {
+    for (let i = 0; i < LAYER_FALLBACK_COUNT; i++) {
+      const a = new Audio(`assets/${file}`);
+      a.volume = 1.0;
+      if (i > 0) {
+        setTimeout(() => a.play().catch(() => {}), i * 90); // small stagger to thicken
+      } else {
+        a.play().catch(() => {});
+      }
+    }
+  }
+
+  async function playLoud (file) {
+    const ctx = await ensureContext();
+    if (!ctx) {
+      fallbackLayerPlay(file);
+      return;
+    }
+    try {
+      const buffer = await loadBuffer(file);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      const gain = ctx.createGain();
+      gain.gain.value = SOUND_GAIN;
+      source.connect(gain).connect(ctx.destination);
+      source.start(0);
+    } catch (e) {
+      console.error('Web Audio playback failed, falling back:', e);
+      fallbackLayerPlay(file);
+    }
+  }
+
+  ipcRenderer.on('play-sound', async (_e, state) => {
+    const file = state === 'Focus' ? 'focus-alert.mp3' : 'break-alert.mp3';
+    playLoud(file);
+  });
+
+  ipcRenderer.on('speak-time', (_e, payload) => {
+    if (!('speechSynthesis' in window)) return;
+    try {
+      const d = new Date(payload.iso);
+      let hours = d.getHours();
+      const minutes = d.getMinutes();
+      const ampm = hours >= 12 ? 'pm' : 'am';
+      const h12 = hours % 12 === 0 ? 12 : hours % 12;
+      const minutePart = minutes === 0 ? '' : `:${minutes.toString().padStart(2,'0')}`;
+      const timeStr = `${h12}${minutePart} ${ampm}`;
+      const modeStr = (payload.state || '').toLowerCase(); // 'focus' or 'break'
+      const phrase = `${timeStr} on ${modeStr}`; // e.g. "1:30 pm on break" or "2 pm on focus"
+      const utter = new SpeechSynthesisUtterance(phrase);
+      utter.rate = 1.0;
+      utter.pitch = 1.0;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utter);
+    } catch (err) {
+      console.error('Speak time failed:', err);
+    }
   });
 });
