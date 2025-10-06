@@ -17,6 +17,7 @@ let completionTitleTimeout = null; // unused now
 let completionFlashInterval = null; // unused now
 let autoStartEnabled = false; // user toggle: auto start focus at 8AM
 let lastAutoStartDay = null; // to ensure single auto-start per calendar day
+let autoStartHour = 8; // default auto start hour (24h format)
 
 // (Flashing disabled) constants retained for easy future restoration
 const COMPLETION_FLASH_INTERVAL_MS = 650;
@@ -121,6 +122,8 @@ function startTimer (duration, state) {
   clearInterval(timerInterval);
   timerInterval = setInterval(() => tickTimer(state), 1000);
   tray.setContextMenu(buildContextMenu()); // refresh tray to show correct pause label
+  // Play an immediate preview sound so user hears start cue (no notification)
+  win?.webContents.send('play-sound', state);
 }
 
 
@@ -229,7 +232,21 @@ ipcMain.on('toggle-speak-time', (_e, enabled) => {
 
 // Renderer can request current preferences
 ipcMain.on('request-prefs', (e) => {
-  e.sender.send('preferences-state', { speakTimeEnabled });
+  e.sender.send('preferences-state', { speakTimeEnabled, autoStartHour, autoStartEnabled });
+});
+
+// Update auto-start hour from renderer (expects integer 0-23)
+ipcMain.on('update-auto-start-hour', (_e, hour) => {
+  const h = parseInt(hour, 10);
+  if (!Number.isNaN(h) && h >= 0 && h <= 23) {
+    autoStartHour = h;
+    // Allow re-trigger if new hour not yet passed today
+    // (Do not reset lastAutoStartDay if already triggered and hour changed to past)
+  }
+});
+
+ipcMain.on('toggle-auto-start', (_e, enabled) => {
+  autoStartEnabled = !!enabled;
 });
 
 /* ---------- auto start (8AM) logic ---------- */
@@ -237,8 +254,8 @@ function maybeAutoStartFocus () {
   if (!autoStartEnabled) return;
   if (timerState !== 'Idle') return; // don't interrupt active session
   const now = new Date();
-  // Only trigger exactly during the 8:00 minute window (00–59s) once per day
-  if (now.getHours() === 8 && now.getMinutes() === 0) {
+  // Only trigger exactly during configured hour at minute 0 (00–59s) once per day
+  if (now.getHours() === autoStartHour && now.getMinutes() === 0) {
     const dayKey = now.toDateString();
     if (lastAutoStartDay !== dayKey) {
       lastAutoStartDay = dayKey;
