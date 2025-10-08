@@ -54,11 +54,38 @@ function createWindow () {
   win.on('close', e => { e.preventDefault(); win.hide(); });
 }
 
+// Safely send IPC to renderer (skip if destroyed)
+function safeSend (channel, payload) {
+  if (!win) return false;
+  if (win.isDestroyed()) return false;
+  const wc = win.webContents;
+  if (!wc || wc.isDestroyed()) return false;
+  try {
+    wc.send(channel, payload);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Fallback system sound if renderer is gone
+function playSystemSoundFallback (state) {
+  try {
+    const sound = state === 'Focus' ? 'focus-alert.mp3' : 'break-alert.mp3';
+    const filePath = path.join(__dirname, 'assets', sound);
+    exec(`afplay "${filePath.replace(/"/g, '\"')}"`);
+  } catch (_) { /* ignore */ }
+}
+
 const formatTime = s => `${Math.floor(s / SECONDS_PER_MINUTE)}m ${s % SECONDS_PER_MINUTE}s`;
 
 function playSound (state) {
   // Trigger renderer to play appropriate sound asset (focus-alert/break-alert)
-  win?.webContents.send('play-sound', state);
+  const sent = safeSend('play-sound', state);
+  if (!sent) {
+    // Renderer not available; play a native sound fallback
+    playSystemSoundFallback(state);
+  }
 
   // Always show a native notification (lets macOS handle presentation / DND)
   new Notification({
@@ -68,15 +95,10 @@ function playSound (state) {
   }).show();
 
   // Update renderer silently (in case window is already open)
-  win?.webContents.send('timer-update', {
-    elapsedTime,
-    timerState,
-    focusCount,
-    breakCount
-  });
-  win?.webContents.send('session-ended', state);
-  if (speakTimeEnabled) {
-    win?.webContents.send('speak-time', { iso: new Date().toISOString(), state });
+    safeSend('timer-update', { elapsedTime, timerState, focusCount, breakCount, intervalDuration });
+    safeSend('session-ended', state);
+    if (speakTimeEnabled) {
+      safeSend('speak-time', { iso: new Date().toISOString(), state });
   }
 
   // Tray title no longer overridden on completion (requested: keep stable menubar text)
@@ -106,7 +128,7 @@ function tickTimer (state) {
   elapsedTime++;
   updateTray();
 
-  win?.webContents.send('timer-update', { elapsedTime, timerState, focusCount, breakCount });
+  safeSend('timer-update', { elapsedTime, timerState, focusCount, breakCount, intervalDuration });
 
   if (elapsedTime % intervalDuration === 0) {
     playSound(state);
@@ -120,10 +142,20 @@ function startTimer (duration, state) {
   intervalDuration = duration;
   isPaused = false; // ✅ Always resume on new timer
   clearInterval(timerInterval);
-  timerInterval = setInterval(() => tickTimer(state), 1000);
+  timerInterval = setInterval(() => {
+    // Stop if renderer destroyed completely to avoid error spam
+    if (!win || win.isDestroyed() || (win.webContents && win.webContents.isDestroyed())) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      return;
+    }
+    tickTimer(state);
+  }, 1000);
   tray.setContextMenu(buildContextMenu()); // refresh tray to show correct pause label
   // Play an immediate preview sound so user hears start cue (no notification)
-  win?.webContents.send('play-sound', state);
+  if (!safeSend('play-sound', state)) {
+    playSystemSoundFallback(state); // fallback preview
+  }
 }
 
 
@@ -175,7 +207,8 @@ function buildContextMenu () {
           elapsedTime,
           timerState,
           focusCount,
-          breakCount
+          breakCount,
+          intervalDuration
         });
       }
     },

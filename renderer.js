@@ -76,8 +76,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ✅ Now safe: listener just updates UI
-  ipcRenderer.on('timer-update', (event, { elapsedTime, timerState, focusCount, breakCount }) => {
-    document.getElementById('timer').textContent = `${Math.floor(elapsedTime / 60)}m ${elapsedTime % 60}s`;
+  ipcRenderer.on('timer-update', (event, { elapsedTime, timerState, focusCount, breakCount, intervalDuration }) => {
+    if (typeof intervalDuration === 'number' && intervalDuration > 0 && timerState !== 'Idle') {
+      const remaining = Math.max(intervalDuration - elapsedTime, 0);
+      const mm = Math.floor(remaining / 60);
+      const ss = remaining % 60;
+      document.getElementById('timer').textContent = `${mm}m ${ss}s remaining`;
+    } else {
+      document.getElementById('timer').textContent = `${Math.floor(elapsedTime / 60)}m ${elapsedTime % 60}s`;
+    }
     document.getElementById('mode').textContent = `Mode: ${timerState}`;
     document.getElementById('counts').textContent = `Focus: ${focusCount} | Breaks: ${breakCount}`;
 
