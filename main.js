@@ -6,7 +6,7 @@ const { exec } = require('child_process');
 let win, tray, timerInterval;
 let timerState = 'Idle';
 let elapsedTime = 0;
-let intervalDuration = 0;
+let intervalDuration = 0; // seconds for the currently running session (single-shot)
 let focusCount = 0;
 let breakCount = 0;
 let isPaused = false;
@@ -79,6 +79,13 @@ function playSystemSoundFallback (state) {
 
 const formatTime = s => `${Math.floor(s / SECONDS_PER_MINUTE)}m ${s % SECONDS_PER_MINUTE}s`;
 
+function logEvent (label, data = {}) {
+  const stamp = new Date().toLocaleTimeString();
+  try {
+    console.log(`[${stamp}] ${label}`, Object.keys(data).length ? data : '');
+  } catch (_) { /* ignore logging errors */ }
+}
+
 function playSound (state) {
   // Trigger renderer to play appropriate sound asset (focus-alert/break-alert)
   const sent = safeSend('play-sound', state);
@@ -94,14 +101,17 @@ function playSound (state) {
     silent: false
   }).show();
 
-  // Update renderer silently (in case window is already open)
-    safeSend('timer-update', { elapsedTime, timerState, focusCount, breakCount, intervalDuration });
-    safeSend('session-ended', state);
-    if (speakTimeEnabled) {
-      safeSend('speak-time', { iso: new Date().toISOString(), state });
-  }
+  logEvent('Session ended alert fired', {
+    state,
+    elapsedSeconds: elapsedTime,
+    intervalDuration,
+    focusCount,
+    breakCount
+  });
 
-  // Tray title no longer overridden on completion (requested: keep stable menubar text)
+  if (speakTimeEnabled) {
+    safeSend('speak-time', { iso: new Date().toISOString(), state });
+  }
 
   // Optional intrusive behavior (user-toggleable) replicates old popup focus
   if (intrusivePopupsEnabled && win) {
@@ -122,17 +132,33 @@ function updateTray () {
 
 
 /* ---------- timer logic ---------- */
-function tickTimer (state) {
-  if (isPaused) return;
+function completeSession () {
+  // Play completion sound & notification (uses current timerState)
+  playSound(timerState);
+  if (timerState === 'Focus') focusCount++; else if (timerState === 'Break') breakCount++;
+  clearInterval(timerInterval);
+  timerInterval = null;
+  // Keep the elapsedTime at intervalDuration for final update before resetting
+  safeSend('session-ended', timerState);
+  safeSend('timer-update', { elapsedTime, timerState, focusCount, breakCount, intervalDuration });
+  // Transition to Idle AFTER sending ended event so renderer can still reference state
+  timerState = 'Idle';
+  // Reset elapsed time so tray/menu shows Idle 0s
+  setTimeout(() => {
+    elapsedTime = 0;
+    updateTray();
+    safeSend('timer-update', { elapsedTime, timerState, focusCount, breakCount, intervalDuration: 0 });
+  }, 250);
+}
 
+function tickTimer () {
+  if (isPaused) return;
   elapsedTime++;
   updateTray();
-
+  // Regular progress update
   safeSend('timer-update', { elapsedTime, timerState, focusCount, breakCount, intervalDuration });
-
-  if (elapsedTime % intervalDuration === 0) {
-    playSound(state);
-    if (state === 'Focus') focusCount++; else breakCount++;
+  if (elapsedTime >= intervalDuration) {
+    completeSession();
   }
 }
 
@@ -140,22 +166,25 @@ function startTimer (duration, state) {
   timerState = state;
   elapsedTime = 0;
   intervalDuration = duration;
-  isPaused = false; // ✅ Always resume on new timer
+  isPaused = false; // Always resume on new timer
   clearInterval(timerInterval);
   timerInterval = setInterval(() => {
-    // Stop if renderer destroyed completely to avoid error spam
-    if (!win || win.isDestroyed() || (win.webContents && win.webContents.isDestroyed())) {
+    // Stop if window or renderer gone to avoid error spam
+    if (!win || win.isDestroyed() || !win.webContents || win.webContents.isDestroyed() || win.webContents.isCrashed?.()) {
       clearInterval(timerInterval);
       timerInterval = null;
       return;
     }
-    tickTimer(state);
+    tickTimer();
   }, 1000);
   tray.setContextMenu(buildContextMenu()); // refresh tray to show correct pause label
-  // Play an immediate preview sound so user hears start cue (no notification)
+  // Immediate start cue (no notification) so user knows we began
   if (!safeSend('play-sound', state)) {
     playSystemSoundFallback(state); // fallback preview
   }
+  logEvent('Session started', { state, durationSeconds: duration });
+  // Initial update so UI shows 0 elapsed right away
+  safeSend('timer-update', { elapsedTime, timerState, focusCount, breakCount, intervalDuration });
 }
 
 
